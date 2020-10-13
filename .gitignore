@@ -1,0 +1,4 @@
+*.mid
+*.hdf5
+logs
+data
