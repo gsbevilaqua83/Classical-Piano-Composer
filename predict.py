@@ -121,6 +121,10 @@ def create_midi(prediction_output, output_filename):
             new_chord = chord.Chord(notes)
             new_chord.offset = offset
             output_notes.append(new_chord)
+        elif pattern == 'rest':
+            new_note = note.Rest()
+            new_note.offset = offset
+            output_notes.append(new_note)
         # pattern is a note
         else:
             new_note = note.Note(pattern)

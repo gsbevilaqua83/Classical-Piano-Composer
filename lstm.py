@@ -65,6 +65,8 @@ def get_notes(songs_path):
                 notes.append(str(element.pitch))
             elif isinstance(element, chord.Chord):
                 notes.append('.'.join(str(n) for n in element.normalOrder))
+            elif isinstance(element, note.Rest):
+                notes.append('rest')
 
     with open('data/notes', 'wb') as filepath:
         pickle.dump(notes, filepath)
