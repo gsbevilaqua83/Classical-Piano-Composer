@@ -1,5 +1,6 @@
 """ This module prepares midi file data and feeds it to the neural
     network for training """
+import os
 import glob
 import pickle
 import numpy
@@ -11,11 +12,18 @@ from keras.layers import LSTM
 from keras.layers import Activation
 from keras.layers import BatchNormalization as BatchNorm
 from keras.utils import np_utils
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, TensorBoard
+import fire
+import datetime
 
-def train_network():
+def train_network(weights=None, epochs=200, songs_path="midi_songs", notes_path='data/notes'):
     """ Train a Neural Network to generate music """
-    notes = get_notes()
+    try:
+        #load the notes used to train the model
+        with open(notes_path, 'rb') as filepath:
+            notes = pickle.load(filepath)
+    except:
+        notes = get_notes(songs_path)
 
     # get amount of pitch names
     n_vocab = len(set(notes))
@@ -24,14 +32,23 @@ def train_network():
 
     model = create_network(network_input, n_vocab)
 
-    train(model, network_input, network_output)
+    resume_epoch_at = 1
+    if weights:
+        model.load_weights(weights)
+        resume_epoch_at = int(weights.split('-')[2])
 
-def get_notes():
+    train(model, network_input, network_output, epochs, initial_epoch=resume_epoch_at)
+
+def get_notes(songs_path):
     """ Get all the notes and chords from the midi files in the ./midi_songs directory """
     notes = []
 
-    for file in glob.glob("midi_songs/*.mid"):
-        midi = converter.parse(file)
+    for file in glob.glob(os.path.join(songs_path, "*.mid")):
+        try:
+            midi = converter.parse(file)
+        except:
+            print("Failed %s" % file)
+            continue
 
         print("Parsing %s" % file)
 
@@ -39,7 +56,7 @@ def get_notes():
 
         try: # file has instrument parts
             s2 = instrument.partitionByInstrument(midi)
-            notes_to_parse = s2.parts[0].recurse() 
+            notes_to_parse = s2.parts[0].recurse()
         except: # file has notes in a flat structure
             notes_to_parse = midi.flat.notes
 
@@ -108,9 +125,13 @@ def create_network(network_input, n_vocab):
 
     return model
 
-def train(model, network_input, network_output):
+def train(model, network_input, network_output, epochs=200, initial_epoch=0):
     """ train the neural network """
     filepath = "weights-improvement-{epoch:02d}-{loss:.4f}-bigger.hdf5"
+
+    log_dir = os.path.join("logs", "fit", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1)
+
     checkpoint = ModelCheckpoint(
         filepath,
         monitor='loss',
@@ -118,9 +139,10 @@ def train(model, network_input, network_output):
         save_best_only=True,
         mode='min'
     )
-    callbacks_list = [checkpoint]
 
-    model.fit(network_input, network_output, epochs=200, batch_size=128, callbacks=callbacks_list)
+    callbacks_list = [checkpoint, tensorboard_callback]
+
+    model.fit(network_input, network_output, initial_epoch=initial_epoch, epochs=epochs, batch_size=128, callbacks=callbacks_list)
 
 if __name__ == '__main__':
-    train_network()
+    fire.Fire(train_network)
