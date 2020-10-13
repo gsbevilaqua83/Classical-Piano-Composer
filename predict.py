@@ -9,11 +9,12 @@ from keras.layers import Dropout
 from keras.layers import LSTM
 from keras.layers import BatchNormalization as BatchNorm
 from keras.layers import Activation
+import fire
 
-def generate():
+def generate(weights, output_filename, notes_path='data/notes', n_notes=500):
     """ Generate a piano midi file """
     #load the notes used to train the model
-    with open('data/notes', 'rb') as filepath:
+    with open(notes_path, 'rb') as filepath:
         notes = pickle.load(filepath)
 
     # Get all pitch names
@@ -22,9 +23,9 @@ def generate():
     n_vocab = len(set(notes))
 
     network_input, normalized_input = prepare_sequences(notes, pitchnames, n_vocab)
-    model = create_network(normalized_input, n_vocab)
-    prediction_output = generate_notes(model, network_input, pitchnames, n_vocab)
-    create_midi(prediction_output)
+    model = create_network(normalized_input, n_vocab, weights)
+    prediction_output = generate_notes(model, network_input, pitchnames, n_vocab, n_notes)
+    create_midi(prediction_output, output_filename)
 
 def prepare_sequences(notes, pitchnames, n_vocab):
     """ Prepare the sequences used by the Neural Network """
@@ -49,7 +50,7 @@ def prepare_sequences(notes, pitchnames, n_vocab):
 
     return (network_input, normalized_input)
 
-def create_network(network_input, n_vocab):
+def create_network(network_input, n_vocab, weights):
     """ create the structure of the neural network """
     model = Sequential()
     model.add(LSTM(
@@ -71,11 +72,11 @@ def create_network(network_input, n_vocab):
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
 
     # Load the weights to each node
-    model.load_weights('weights.hdf5')
+    model.load_weights(weights)
 
     return model
 
-def generate_notes(model, network_input, pitchnames, n_vocab):
+def generate_notes(model, network_input, pitchnames, n_vocab, n_notes):
     """ Generate notes from the neural network based on a sequence of notes """
     # pick a random sequence from the input as a starting point for the prediction
     start = numpy.random.randint(0, len(network_input)-1)
@@ -86,7 +87,7 @@ def generate_notes(model, network_input, pitchnames, n_vocab):
     prediction_output = []
 
     # generate 500 notes
-    for note_index in range(500):
+    for note_index in range(n_notes):
         prediction_input = numpy.reshape(pattern, (1, len(pattern), 1))
         prediction_input = prediction_input / float(n_vocab)
 
@@ -101,7 +102,7 @@ def generate_notes(model, network_input, pitchnames, n_vocab):
 
     return prediction_output
 
-def create_midi(prediction_output):
+def create_midi(prediction_output, output_filename):
     """ convert the output from the prediction to notes and create a midi file
         from the notes """
     offset = 0
@@ -132,7 +133,7 @@ def create_midi(prediction_output):
 
     midi_stream = stream.Stream(output_notes)
 
-    midi_stream.write('midi', fp='test_output.mid')
+    midi_stream.write('midi', fp=f'{output_filename}.mid')
 
 if __name__ == '__main__':
-    generate()
+    fire.Fire(generate)
